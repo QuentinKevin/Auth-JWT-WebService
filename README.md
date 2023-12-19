@@ -1,4 +1,4 @@
-# YSpotify
+# JWT TOKEN
 npm install
 postman :
     port : 88888
@@ -8,9 +8,3 @@ postman :
 
     localhost:8888/login
         avec basic auth pour se logger
-
-    localhost:8888/auth-url
-        pour se connecter à Spotify
-
-    localhost:8888/group
-        pour rejoindre, créer et supprimer un groupe (avec les paramètres token + group)
