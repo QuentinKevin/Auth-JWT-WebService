@@ -1,0 +1,25 @@
+{
+  "name": "auth-jwt-webservice",
+  "version": "1.0.0",
+  "description": "npm install\r postman :\r     port : 88888",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QuentinKevin/Auth-JWT-WebService.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/QuentinKevin/Auth-JWT-WebService/issues"
+  },
+  "homepage": "https://github.com/QuentinKevin/Auth-JWT-WebService#readme",
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "express": "^4.18.2",
+    "fs": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

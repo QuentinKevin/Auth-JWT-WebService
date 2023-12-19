@@ -1,16 +1,11 @@
 const express = require('express');
 const Crypto = require('crypto');
 const fs = require('fs');
-let querystring = require('querystring');
-const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const users = require('./users.json');
-let groups = require('./groups.json');
-const redirect_uri = 'http://localhost:8888/callback/';
 
 
 const app = express();
-let local_user = null;
 
 app.get('/login', (req, res) => {
     const auth = req.header('Authorization');
@@ -82,9 +77,7 @@ app.get('/sign', (req, res) => {
         let data = {
             "id": ID,
             "local_user": local_username,
-            "local_password": local_password,
-            "spotify_id": "",
-            "spotify_secret": ""
+            "local_password": local_password
         }
 
         users.push(data);
@@ -99,149 +92,103 @@ app.get('/sign', (req, res) => {
     }
 });
 
-
-app.get("/auth-url", (req, res) => {
-    let decode = jwt.verify(req.query.token, 'secret');
-    for (const user of users) {
-        if (decode.local_user === user.local_user)
-            local_user = user;
-    }
-    if (!local_user.spotify_id == '') {
-        const scope = 'user-read-private user-read-email user-read-recently-played';
-        res.redirect('https://accounts.spotify.com/authorize?' +
-            querystring.stringify({
-                response_type: 'code',
-                client_id: local_user.spotify_id,
-                scope: scope,
-                redirect_uri: redirect_uri,
-            }));
-    } else {
-        res.status(401).send('Unauthorized');
-    }
-});
-
-app.get('/group', (req, res) => {
+app.get('/renew', (req, res) => {
     const auth = req.header('Authorization');
 
-    let token = req.query.token;
-
-    if (token == null) {
+    const isBasicAuth = auth && auth.startsWith('Basic ');
+    if (!isBasicAuth) {
         res.status(401).send('Unauthorized');
         return;
-    } else {
-        const base64String = token.split('.')[1];
-        const decodedValue = JSON.parse(Buffer.from(base64String, 'base64').toString('ascii'));
-
-        let temp_group = groups;
-
-
-        let messageRetour = "";
-
-        // creation du groupe et ajout du user
-        let i = 0;
-        let data;
-        let onetime = false;
-        for (const group of groups) {
-            let verification = 0;
-            for (let j = 0; j < temp_group[i].users.length; j++) {
-                if (temp_group[i].group_name == req.query.group) {
-                    onetime = true;
-                    if(temp_group[i].users[j] == decodedValue.local_user) {
-                        verification++;
-                    }
-                } else if (onetime == false && temp_group[i].group_name != req.query.group) {
-                    let ID = 0;
-                    onetime = true;
-                    for (const group of groups) {
-                        ID = group.id;
-                    }
-                    ID++;
-                    data = {
-                        "id": ID,
-                        "group_name": req.query.group,
-                        "admin": decodedValue.local_user,
-                        "users": [decodedValue.local_user]
-                    }
-
-                    messageRetour = "Groupe crée";
-                }
-            }
-            if (verification == 0 && onetime == true) {
-                temp_group[i].users.splice(temp_group[i].users.length, 0, decodedValue.local_user);
-                messageRetour = "Groupe mise à jour";
-            }
-            else if(onetime == true) {
-                messageRetour = "Vous êtes déjà dans ce groupe";
-            }
-            i++;
-        }
-
-        if(data != null){
-            temp_group.splice(temp_group.length , 0, data );
-        }
-
-
-        // supprimer le user de la liste des users
-        for (let j = 0; j < temp_group.length; j++) {
-            if(req.query.group != temp_group[j].group_name) {
-                for (let i = 0; i < temp_group[j].users.length; i++) {
-                    if (temp_group[j].users[i] == decodedValue.local_user) {
-                        temp_group[j].users.splice(i, 1);
-                    }
-                    if (temp_group[j].admin == decodedValue.local_user) {
-                        temp_group[j].admin = null;
-                    }
-                }
-                //supprimer group
-                for (let j = 0; j < temp_group.length; j++) {
-                    if (temp_group[j].users.length == 0) {
-                        temp_group.splice(j, 1);
-                    }
-                }
-            }
-        }
-
-        groups = temp_group;
-
-        groups.forEach(function (item, index) {
-            fs.writeFile('groups.json', JSON.stringify(groups), function (err) {
-                if (err) return console.log(err);
-            });
-        });
-
-        res.status(200).send(messageRetour);
     }
+
+    const decodedValue = JSON.parse(Buffer.from(req.query.token.split('.')[1], 'base64').toString('ascii'));
+
+    const token = jwt.sign(
+        {
+            sub: decodedValue.sub,
+            local_user: decodedValue.local_user,
+            local_password: decodedValue.local_password
+        },
+        'secret',
+        {expiresIn: '1 hour'}
+    );
+    
+    res.json({token});
+
+    res.status(200).send('Renew Successful');
+
 });
 
+app.get('/users', (req, res) => {
+    const auth = req.header('Authorization');
 
-app.get('/callback', (req, res) => {
-    const code = req.query.code || null;
+    const isBasicAuth = auth && auth.startsWith('Basic ');
+    if (!isBasicAuth) {
+        res.status(401).send('Unauthorized');
+        return;
+    }
 
-    const authOptions = {
-        url: 'https://accounts.spotify.com/api/token',
-        form: {
-            code: code,
-            redirect_uri: redirect_uri,
-            grant_type: 'authorization_code'
-        },
-        headers: {
-            'Authorization': 'Basic ' +
-                (Buffer.from(local_user.spotify_id + ':' + local_user.spotify_secret).toString('base64')),
-            'content-type': 'application/x-www-form-urlencoded',
-            'accept-encoding': 'null'
-        },
-    };
+let usersName = [];
 
-    axios.post(authOptions.url, authOptions.form, {
-        headers: authOptions.headers,
+    for (const user of users) {
+        usersName.push(user.local_user);
+    }
 
-    }).then((response) => {
-        const data = response.data;
-        console.log(data);
-        res.json(data);
-    }).catch((err) => {
-        console.log(err);
-    });
+    const decodedValue = JSON.parse(Buffer.from(req.query.token.split('.')[1], 'base64').toString('ascii'));
+    
+    res.json(usersName);
+});
+
+app.get('/editor', (req, res) => {
+    const auth = req.header('Authorization');
+
+    const isBasicAuth = auth && auth.startsWith('Basic ');
+    if (!isBasicAuth) {
+        res.status(401).send('Unauthorized');
+        return;
+    }
+
+    const decodedValue = JSON.parse(Buffer.from(req.query.token.split('.')[1], 'base64').toString('ascii'));
+
+    let valideUser = null;
+
+    for (const user of users) {
+        if (user.local_user === decodedValue.local_user || decodedValue.local_user === 'admin') {
+            valideUser = user;
+        }
+    }
+
+    if (valideUser != null) {
+        if (req.query.user != undefined){
+            for (const user of users) {
+                if (user.local_user === decodedValue.local_user) {
+                    user.local_user = req.query.user;
+                    users.forEach(function (item, index) {
+                        fs.writeFile('users.json', JSON.stringify(users), function (err) {
+                            if (err) return console.log(err);
+                        });
+                    });
+                }
+            }
+        }
+
+        if (req.query.password != undefined) {
+            for (const user of users) {
+                if (user.local_user === decodedValue.local_user) {
+                    user.local_password = Crypto.createHash('SHA256').update(req.query.password).digest('hex');
+                    users.forEach(function (item, index) {
+                        fs.writeFile('users.json', JSON.stringify(users), function (err) {
+                            if (err) return console.log(err);
+                        });
+                    });
+                }
+            }
+        }
+
+        res.status(200).send('Access Granted');
+    } else {
+        res.status(401).send('Unauthorized');
+    }
 });
 
 app.listen(8888);
