@@ -1,0 +1,20 @@
+[
+  {
+    "id": 0,
+    "group_name": "groupe1",
+    "admin": "quentin",
+    "users": [
+      "user1",
+      "user2",
+      "isadmin"
+    ]
+  },
+  {
+    "id": 1,
+    "group_name": "groupe12",
+    "admin": "isadmin",
+    "users": [
+      "isadmin"
+    ]
+  }
+]
